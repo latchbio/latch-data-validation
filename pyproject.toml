@@ -1,11 +1,11 @@
 [tool.poetry]
-name = "latch-python-data-validation"
+name = "latch-data-validation"
 version = "0.1.0"
 description = "Data validation for latch python backend services"
 authors = ["Max Smolin <max@latch.bio>"]
 license = "CC0 1.0"
 readme = "README.md"
-packages = [{include = "latch_python_data_validation"}]
+packages = [{include = "latch_data_validation"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
