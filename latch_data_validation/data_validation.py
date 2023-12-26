@@ -9,6 +9,7 @@ from typing import (
     Mapping,
     Sequence,
     TypeAlias,
+    TypedDict,
     TypeVar,
     Union,
     get_args,
@@ -79,7 +80,7 @@ class DataValidationError(RuntimeError):
 
         pretty_msg = prettify(
             self.msg,
-            add_colon=True
+            add_colon=True,
             # add_colon=len(self.children) > 0 or len(self.details) > 0
         )
         res = f"{indent}{pretty_msg}\n"
@@ -312,7 +313,7 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
 
             return origin(res)
 
-    if issubclass(cls, dict):
+    if issubclass(cls, TypedDict):
         # TypedDict
         if not isinstance(x, dict):
             raise DataValidationError("expected an object", x, cls)
@@ -405,6 +406,7 @@ def validate(x: JsonValue, cls: type[T]) -> T:
             "code.namespace": validate.__module__,
         },
     ) as s:
-        s.set_attribute("validation.target", cls.__qualname__)
+        # ayush: union types dont have a `__qualname__` attr
+        s.set_attribute("validation.target", getattr(cls, "__qualname__", repr(cls)))
 
         return untraced_validate(x, cls)
