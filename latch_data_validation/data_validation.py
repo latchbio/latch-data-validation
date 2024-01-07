@@ -9,7 +9,6 @@ from typing import (
     Mapping,
     Sequence,
     TypeAlias,
-    TypedDict,
     TypeVar,
     Union,
     get_args,
@@ -313,7 +312,7 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
 
             return origin(res)
 
-    if issubclass(cls, TypedDict):
+    if issubclass(cls, dict):
         # TypedDict
         if not isinstance(x, dict):
             raise DataValidationError("expected an object", x, cls)
