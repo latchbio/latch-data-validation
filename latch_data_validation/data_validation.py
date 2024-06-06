@@ -2,7 +2,10 @@ import collections.abc
 import dataclasses
 from itertools import chain
 from types import NoneType, UnionType
+from enum import Enum
+
 from typing import (
+    NewType,
     Any,
     Iterable,
     Literal,
@@ -25,7 +28,6 @@ T = TypeVar("T")
 JsonArray: TypeAlias = Sequence["JsonValue"]
 JsonObject: TypeAlias = Mapping[str, "JsonValue"]
 JsonValue: TypeAlias = JsonObject | JsonArray | str | int | float | bool | None
-
 
 def prettify(x: str, *, add_colon: bool = False) -> str:
     return x[0].title() + x[1:] + (":" if add_colon else "")
@@ -129,10 +131,33 @@ class DataValidationError(RuntimeError):
 
 # todo(maximsmol): typing
 def untraced_validate(x: JsonValue, cls: type[T]) -> T:
-    if dataclasses.is_dataclass(cls):
-        if isinstance(x, cls):
-            return x
+    if isinstance(cls, ForwardRef):
+        fr = typing.cast(ForwardRef, cls)
 
+        frame = forward_frames.get(id(cls))
+        if frame is None:
+            raise DataValidationError("untraced ForwardRef", x, cls)
+
+        f_globals = frame.f_globals
+        f_locals = frame.f_locals
+
+        next = f_globals.get(fr.__forward_arg__)
+        if next is None:
+            next = f_locals.get(fr.__forward_arg__)
+
+        if next is None:
+            raise DataValidationError("unresolvable ForwardRef", x, cls)
+
+        return untraced_validate(x, next)
+
+    if cls is Any:
+        return x
+
+    if isinstance(cls, NewType):
+        # todo(maximsmol): this probably needs to be typed properly on the gql client layer like enums
+        return untraced_validate(x, cls.__supertype__)
+
+    if dataclasses.is_dataclass(cls):
         if not isinstance(x, dict):
             raise DataValidationError("expected an object", x, cls)
 
@@ -222,8 +247,8 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
             )
 
         if issubclass(origin, collections.abc.Mapping):
-            if not isinstance(x, collections.abc.Mapping):
-                raise DataValidationError("expected a dict", x, cls)
+            if not isinstance(x, origin):
+                raise DataValidationError("mapping type does not match", x, cls)
 
             key_type, value_type = get_args(cls)
 
@@ -255,7 +280,7 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
 
             if len(errors) > 0:
                 raise DataValidationError(
-                    "list items did not match schema", x, cls, children=errors
+                    "mapping items did not match schema", x, cls, children=errors
                 )
 
             if origin is collections.abc.Mapping:
@@ -289,8 +314,11 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
             return origin(res)
 
         if issubclass(origin, Iterable):
-            if not isinstance(x, collections.abc.Iterable):
-                raise DataValidationError("expected an iterable", x, cls)
+            if isinstance(x, str):
+                raise DataValidationError("iterable type does not match", x, cls)
+
+            if not isinstance(x, origin):
+                raise DataValidationError("iterable type does not match", x, cls)
 
             item_type = get_args(cls)[0]
 
@@ -307,7 +335,10 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
                     "list items did not match schema", x, cls, children=errors
                 )
 
-            if origin is collections.abc.Iterable:
+            if any(
+                origin is x
+                for x in [collections.abc.Iterable, collections.abc.Sequence]
+            ):
                 return list(res)
 
             return origin(res)
@@ -365,6 +396,10 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
 
         return cls(**fields)
 
+    # todo(maximsmol): make conversions to enums and dataclasses optional
+    if issubclass(cls, Enum):
+        return cls(x)
+
     if issubclass(cls, bool):
         if not isinstance(x, bool):
             raise DataValidationError("expected a boolean", x, cls)
@@ -408,3 +443,4 @@ def validate(x: JsonValue, cls: type[T]) -> T:
         s.set_attribute("validation.target", cls.__qualname__)
 
         return untraced_validate(x, cls)
+
