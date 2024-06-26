@@ -1,8 +1,9 @@
 import collections.abc
 import dataclasses
+import sys
+import typing
 from enum import Enum
 from itertools import chain
-import sys
 from types import FrameType, NoneType, UnionType
 from typing import (
     Any,
@@ -19,7 +20,6 @@ from typing import (
     get_origin,
     get_type_hints,
 )
-import typing
 
 from opentelemetry.trace import get_tracer
 
@@ -103,7 +103,7 @@ class DataValidationError(RuntimeError):
 
         pretty_msg = prettify(
             self.msg,
-            add_colon=True
+            add_colon=True,
             # add_colon=len(self.children) > 0 or len(self.details) > 0
         )
         res = f"{indent}{pretty_msg}\n"
@@ -196,7 +196,8 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
         for f in dataclasses.fields(cls):
             schema_fields.add(f.name)
             if f.name not in x:
-                missing_class_fields.append(f)
+                if get_origin(f.type) != Union and NoneType not in get_args(f.type):
+                    missing_class_fields.append(f)
                 continue
 
             try:
@@ -457,7 +458,6 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
         return x
 
     raise DataValidationError("[!Internal Error!] unknown type", x, cls)
-
 
 
 def validate(x: JsonValue, cls: type[T]) -> T:
