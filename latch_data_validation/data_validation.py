@@ -425,10 +425,9 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
 
     # todo(maximsmol): make conversions to enums and dataclasses optional
     if issubclass(cls, Enum):
-        try:
-            return cls(x)
-        except ValueError:
+        if not any(x == f.value for f in cls):
             raise DataValidationError("enum value did not match", x, cls)
+        return cls(x)
 
     if issubclass(cls, bool):
         if not isinstance(x, bool):
