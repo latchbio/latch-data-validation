@@ -2,23 +2,22 @@ import collections.abc
 import dataclasses
 import sys
 import typing
+from collections.abc import Iterable, Mapping, Sequence
 from enum import Enum
 from itertools import chain
 from types import FrameType, NoneType, UnionType
 from typing import (
     Any,
     ForwardRef,
-    Iterable,
     Literal,
-    Mapping,
     NewType,
-    Sequence,
     TypeAlias,
     TypeVar,
     Union,
     get_args,
     get_origin,
     get_type_hints,
+    overload,
 )
 
 from opentelemetry.trace import get_tracer
@@ -82,7 +81,7 @@ class DataValidationError(RuntimeError):
         *,
         details: dict[str, NestyLines] = {},
         children: DataValidationErrorChildren = [],
-    ):
+    ) -> None:
         self.msg = msg
         self.val = val
         self.cls = cls
@@ -98,7 +97,7 @@ class DataValidationError(RuntimeError):
             children=[(x[0], x[1].json()) for x in self.children],
         )
 
-    def explain(self, indent: str = ""):
+    def explain(self, indent: str = "") -> str:
         from textwrap import wrap
 
         pretty_msg = prettify(
@@ -147,16 +146,16 @@ class DataValidationError(RuntimeError):
 
         return res
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"\n{self.explain()}"
 
 
 # todo(maximsmol): generics
 # todo(maximsmol): typing
 def untraced_validate(x: JsonValue, cls: type[T]) -> T:
-    if dataclasses.is_dataclass(cls):
-        if isinstance(x, cls):
-            return x
+    if dataclasses.is_dataclass(cls) and isinstance(x, cls):
+        return x
+
     if isinstance(cls, ForwardRef):
         fr = typing.cast(ForwardRef, cls)
 
@@ -202,7 +201,7 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
             try:
                 fields[f.name] = untraced_validate(x[f.name], f.type)
             except DataValidationError as e:
-                errors.append((f"field '{f.name}' did not match schema", e))
+                errors.append((f"field {f.name!r} did not match schema", e))
 
         for k in x.keys():
             if k in schema_fields:
@@ -251,9 +250,17 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
         if origin is Literal:
             args = get_args(cls)
 
-            if x != args[0]:
+            if all(x != arg for arg in args):
+                if len(args) == 1:
+                    raise DataValidationError(
+                        f"did not match literal {args[0]!r}", x, cls
+                    )
+
                 raise DataValidationError(
-                    f"did not match literal {repr(args[0])}", x, cls
+                    "did not match literal",
+                    x,
+                    cls,
+                    details={"options": [f"- {arg!r}" for arg in args]},
                 )
 
             return args[0]
@@ -266,7 +273,7 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
                 try:
                     return untraced_validate(x, arg)
                 except DataValidationError as e:
-                    errors.append((f"option '{arg}' did not match", e))
+                    errors.append((f"option {arg!r} did not match", e))
 
             raise DataValidationError(
                 "union did not match schema", x, cls, children=errors
@@ -291,13 +298,13 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
                     key = untraced_validate(k, key_type)
                     key_ok = True
                 except DataValidationError as e:
-                    errors.append((f"key {k}", e))
+                    errors.append((f"key {k!r}", e))
 
                 try:
                     value = untraced_validate(v, value_type)
                     value_ok = True
                 except DataValidationError as e:
-                    errors.append((f"value for key {k}", e))
+                    errors.append((f"value for key {k!r}", e))
 
                 if not key_ok or not value_ok:
                     continue
@@ -326,7 +333,7 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
                 try:
                     res.append(untraced_validate(item, item_type))
                 except DataValidationError as e:
-                    errors.append((f"item {idx+1}", e))
+                    errors.append((f"item {idx + 1}", e))
 
             if len(x) != len(ts) or len(errors) > 0:
                 raise DataValidationError(
@@ -355,7 +362,7 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
                 try:
                     res.append(untraced_validate(item, item_type))
                 except DataValidationError as e:
-                    errors.append((f"item {idx+1}", e))
+                    errors.append((f"item {idx + 1}", e))
 
             if len(errors) > 0:
                 raise DataValidationError(
@@ -393,13 +400,13 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
             try:
                 fields[k] = untraced_validate(x[k], types[k])
             except DataValidationError as e:
-                errors.append((f"field '{k}' did not match schema", e))
+                errors.append((f"field {k!r} did not match schema", e))
 
         for k in x.keys():
             if k in schema_fields:
                 continue
 
-            extraneous_fields.append("- " + repr(k))
+            extraneous_fields.append(f"- {k!r}")
 
         if len(missing_fields) > 0 or len(extraneous_fields) > 0 or len(errors) > 0:
             raise DataValidationError(
