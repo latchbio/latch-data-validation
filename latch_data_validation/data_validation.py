@@ -250,20 +250,18 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
         if origin is Literal:
             args = get_args(cls)
 
-            if all(x != arg for arg in args):
-                if len(args) == 1:
-                    raise DataValidationError(
-                        f"did not match literal {args[0]!r}", x, cls
-                    )
+            if any(x == arg for arg in args):
+                return args[0]
 
-                raise DataValidationError(
-                    "did not match literal",
-                    x,
-                    cls,
-                    details={"options": [f"- {arg!r}" for arg in args]},
-                )
+            if len(args) == 1:
+                raise DataValidationError(f"did not match literal {args[0]!r}", x, cls)
 
-            return args[0]
+            raise DataValidationError(
+                "did not match literal",
+                x,
+                cls,
+                details={"options": [f"- {arg!r}" for arg in args]},
+            )
 
         if origin is Union or issubclass(origin, UnionType):
             args = get_args(cls)
