@@ -27,7 +27,7 @@ wheels = [
 
 [[package]]
 name = "latch-data-validation"
-version = "0.1.10"
+version = "0.1.12"
 source = { editable = "." }
 dependencies = [
     { name = "opentelemetry-api" },

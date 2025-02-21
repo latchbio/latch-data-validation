@@ -1,6 +1,6 @@
 [project]
 name = "latch-data-validation"
-version = "0.1.11"
+version = "0.1.12"
 description = "Runtime type validation"
 authors = [{ name = "maximsmol", email = "max@latch.bio" }]
 dependencies = ["opentelemetry-api>=1.15.0"]
