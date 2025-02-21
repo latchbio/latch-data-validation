@@ -250,8 +250,9 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
         if origin is Literal:
             args = get_args(cls)
 
-            if any(x == arg for arg in args):
-                return args[0]
+            for arg in args:
+                if x == arg:
+                    return arg
 
             if len(args) == 1:
                 raise DataValidationError(f"did not match literal {args[0]!r}", x, cls)
