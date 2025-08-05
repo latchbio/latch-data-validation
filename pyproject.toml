@@ -1,10 +1,13 @@
 [project]
 name = "latch-data-validation"
-version = "0.1.12"
+version = "2.0.0"
 description = "Runtime type validation"
 authors = [{ name = "maximsmol", email = "max@latch.bio" }]
-dependencies = ["opentelemetry-api>=1.15.0"]
-requires-python = ">=3.11.0"
+dependencies = [
+    "ruff>=0.12.7",
+    "typing-extensions>=4.14.0",
+]
+requires-python = ">=3.13.0"
 readme = "README.md"
 license = { text = "CC0-1.0" }
 
@@ -13,10 +16,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv]
-dev-dependencies = ["ruff>=0.9.5"]
+dev-dependencies = ["hypothesis>=6.135.4", "ruff>=0.11.13"]
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint]
 preview = true
@@ -36,7 +39,7 @@ extend-select = [
   "ASYNC",
   "ASYNC1",
   "S",
-  # "BLE", # `raise x from y` does not work
+  "BLE",
   "FBT",
   "B",
   "A",
@@ -56,7 +59,7 @@ extend-select = [
   "PIE",
   "T20",
   "PYI",
-  "PT",
+  # "PT",
   "Q",
   "RSE",
   "RET",
@@ -146,13 +149,12 @@ ignore = [
 
   "PD901",
 
-  "UP040",
-
   "SIM112",
 
   "PLC1901",
 
   "TCH002",
+  "TC006",
 ]
 
 [tool.ruff.format]
@@ -160,6 +162,8 @@ preview = true
 skip-magic-trailing-comma = true
 
 [tool.pyright]
+enableExperimentalFeatures = true
+
 reportUnknownArgumentType = "none"
 reportUnknownLambdaType = "none"
 reportUnknownMemberType = "none"
