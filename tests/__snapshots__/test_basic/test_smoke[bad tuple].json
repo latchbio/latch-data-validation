@@ -1,0 +1,23 @@
+{
+  "children": [
+    [
+      "item 2",
+      {
+        "children": [],
+        "cls": "str",
+        "details": {},
+        "msg": "expected a string",
+        "val": 2
+      }
+    ]
+  ],
+  "cls": "tuple",
+  "details": {
+    "length mismatch": "expected 2 but got 2"
+  },
+  "msg": "tuple items did not match schema",
+  "val": [
+    1,
+    2
+  ]
+}

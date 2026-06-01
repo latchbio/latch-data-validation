@@ -1,0 +1,18 @@
+{
+  "children": [
+    [
+      "key True",
+      {
+        "children": [],
+        "cls": "str",
+        "details": {},
+        "msg": "expected a string",
+        "val": true
+      }
+    ]
+  ],
+  "cls": "dict",
+  "details": {},
+  "msg": "mapping items did not match schema",
+  "val": {}
+}

@@ -1,0 +1,11 @@
+{
+  "children": [],
+  "cls": "test_typeddict_nontotal.<locals>.Test",
+  "details": {
+    "missing fields": [
+      "- 'b'"
+    ]
+  },
+  "msg": "dictionary did not match schema",
+  "val": {}
+}

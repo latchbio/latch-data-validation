@@ -1,0 +1,7 @@
+{
+  "children": [],
+  "cls": "test_smoke.<locals>.Stuff",
+  "details": {},
+  "msg": "enum value did not match",
+  "val": 3
+}

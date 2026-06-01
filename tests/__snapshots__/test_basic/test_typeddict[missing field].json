@@ -1,0 +1,16 @@
+{
+  "children": [],
+  "cls": "test_typeddict.<locals>.Test",
+  "details": {
+    "missing fields": [
+      "- 'b'"
+    ]
+  },
+  "msg": "dictionary did not match schema",
+  "val": {
+    "a": 123,
+    "nest": {
+      "hello": "world"
+    }
+  }
+}
