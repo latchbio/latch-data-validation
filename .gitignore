@@ -3,3 +3,4 @@
 /credentials
 /.coverage
 /htmlcov
+.DS_Store
