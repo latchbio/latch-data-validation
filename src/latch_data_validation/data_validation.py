@@ -422,8 +422,6 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
         fields: dict[str, object] = {}
         schema_fields: set[str] = set()
 
-        print(cls.__total__, cls.__required_keys__, cls.__optional_keys__)
-
         missing_fields: list[str] = []
         extraneous_fields: list[str] = []
         errors: DataValidationErrorChildren = []
