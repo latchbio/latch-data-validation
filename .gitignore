@@ -1,3 +1,6 @@
-dist/
+/dist/
 /**/__pycache__/
 /credentials
+/.coverage
+/htmlcov
+.DS_Store

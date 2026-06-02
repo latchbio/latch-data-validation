@@ -1,0 +1,20 @@
+{
+  "children": [
+    [
+      "value for key 'hello'",
+      {
+        "children": [],
+        "cls": "int",
+        "details": {},
+        "msg": "expected an integer",
+        "val": true
+      }
+    ]
+  ],
+  "cls": "dict",
+  "details": {},
+  "msg": "mapping items did not match schema",
+  "val": {
+    "hello": true
+  }
+}

@@ -2,7 +2,8 @@ import collections.abc
 import dataclasses
 import sys
 import typing
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Sequence
+from contextlib import suppress
 from enum import Enum
 from itertools import chain
 from types import FrameType, NoneType, UnionType
@@ -13,16 +14,23 @@ from typing import (
     NewType,
     TypeAlias,
     TypeVar,
-    Union,
+    Union,  # pyright: ignore[reportDeprecated]
     get_args,
     get_origin,
     get_type_hints,
-    overload,
+)
+from typing import (  # noqa: UP035
+    Mapping as MappingOld,  # pyright: ignore[reportDeprecated]
+)
+from typing import (  # noqa: UP035
+    Sequence as SequenceOld,  # pyright: ignore[reportDeprecated]
 )
 
-from opentelemetry.trace import get_tracer
+from typing_extensions import NotRequired, Required
 
-tracer = get_tracer(__name__)
+get_tracer = None
+with suppress(ImportError):
+    from opentelemetry.trace import get_tracer
 
 forward_frames: dict[int, FrameType] = {}
 real_init = ForwardRef.__init__
@@ -45,8 +53,10 @@ ForwardRef.__init__ = init
 
 T = TypeVar("T")
 
-JsonArray: TypeAlias = Sequence["JsonValue"]
-JsonObject: TypeAlias = Mapping[str, "JsonValue"]
+# `collections.abc` types do not create `ForwardRef` instances for us to patch
+# so we can't support the non-deprecated type. It works with `type T = ...` syntax though
+JsonArray: TypeAlias = SequenceOld["JsonValue"]
+JsonObject: TypeAlias = MappingOld[str, "JsonValue"]
 JsonValue: TypeAlias = JsonObject | JsonArray | str | int | float | bool | None
 
 
@@ -92,7 +102,9 @@ class DataValidationError(RuntimeError):
         return dict(
             msg=self.msg,
             val=self.val,
-            cls=self.cls.__qualname__,
+            cls=self.cls.__qualname__
+            if hasattr(self.cls, "__qualname__")
+            else type(self.cls).__qualname__,
             details=self.details,
             children=[(x[0], x[1].json()) for x in self.children],
         )
@@ -153,15 +165,20 @@ class DataValidationError(RuntimeError):
 # todo(maximsmol): generics
 # todo(maximsmol): typing
 def untraced_validate(x: JsonValue, cls: type[T]) -> T:
+    if cls is None:
+        if x is not None:
+            raise DataValidationError("expected None", x, cls)
+        return None
+
     if dataclasses.is_dataclass(cls) and isinstance(x, cls):
         return x
 
     if isinstance(cls, ForwardRef):
-        fr = typing.cast(ForwardRef, cls)
+        fr = typing.cast(ForwardRef, cls)  # pyright: ignore[reportUnreachable]
 
         frame = forward_frames.get(id(cls))
         if frame is None:
-            raise DataValidationError("untraced ForwardRef", x, cls)
+            raise ValueError(f"untraced ForwardRef: {cls!r}")
 
         f_globals = frame.f_globals
         f_locals = frame.f_locals
@@ -171,9 +188,12 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
             next = f_locals.get(fr.__forward_arg__)
 
         if next is None:
-            raise DataValidationError("unresolvable ForwardRef", x, cls)
+            raise ValueError(f"unresolvable ForwardRef: {cls!r}")
 
         return untraced_validate(x, next)
+
+    if isinstance(cls, str):
+        raise ValueError(f"untraced ForwardRef: {cls!r}")
 
     if cls is Any:
         return x
@@ -326,6 +346,22 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
 
             ts = get_args(cls)
 
+            if len(ts) == 2 and ts[1] is ...:
+                res: list[object] = []
+                errors: DataValidationErrorChildren = []
+                for idx, item in enumerate(x):
+                    try:
+                        res.append(untraced_validate(item, ts[0]))
+                    except DataValidationError as e:
+                        errors.append((f"item {idx + 1}", e))
+
+                if len(errors) > 0:
+                    raise DataValidationError(
+                        "tuple items did not match schema", x, cls, children=errors
+                    )
+
+                return origin(res)
+
             res: list[object] = []
             errors: DataValidationErrorChildren = []
             for idx, (item, item_type) in enumerate(zip(x, ts)):
@@ -392,12 +428,23 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
         for k in chain(cls.__required_keys__, cls.__optional_keys__):
             schema_fields.add(k)
             if k not in x:
-                if k in cls.__required_keys__:
+                # check origin to support Python versions that do not have native NotRequired
+                if get_origin(types[k]) is NotRequired:
+                    continue
+
+                if k in cls.__required_keys__ or get_origin(types[k]) is Required:
                     missing_fields.append("- " + repr(k))
+
                 continue
 
             try:
-                fields[k] = untraced_validate(x[k], types[k])
+                typ = types[k]
+
+                origin = get_origin(typ)
+                if origin is NotRequired or origin is Required:
+                    typ = get_args(typ)[0]
+
+                fields[k] = untraced_validate(x[k], typ)
             except DataValidationError as e:
                 errors.append((f"field {k!r} did not match schema", e))
 
@@ -405,6 +452,7 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
             if k in schema_fields:
                 continue
 
+            # todo(maximsmol): after PEP 728, default should be open `TypedDict`s
             extraneous_fields.append(f"- {k!r}")
 
         if len(missing_fields) > 0 or len(extraneous_fields) > 0 or len(errors) > 0:
@@ -468,6 +516,11 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
 
 
 def validate(x: JsonValue, cls: type[T]) -> T:
+    if get_tracer is None:
+        return untraced_validate(x, cls)
+
+    tracer = get_tracer(__name__)
+
     with tracer.start_as_current_span(
         validate.__qualname__,
         attributes={
@@ -475,6 +528,11 @@ def validate(x: JsonValue, cls: type[T]) -> T:
             "code.namespace": validate.__module__,
         },
     ) as s:
-        s.set_attribute("validation.target", cls.__qualname__)
+        s.set_attribute(
+            "validation.target",
+            cls.__qualname__
+            if hasattr(cls, "__qualname__")
+            else type(cls).__qualname__,
+        )
 
         return untraced_validate(x, cls)

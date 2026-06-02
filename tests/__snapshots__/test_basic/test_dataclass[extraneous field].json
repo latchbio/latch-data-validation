@@ -1,0 +1,24 @@
+{
+  "children": [],
+  "cls": "test_dataclass.<locals>.Test",
+  "details": {
+    "extraneous fields": [
+      "- 'extra'"
+    ]
+  },
+  "msg": "dataclass did not match schema",
+  "val": {
+    "a": 123,
+    "b": false,
+    "c": {
+      "o1": {
+        "zzz": "world"
+      },
+      "o2": {
+        "zzz": "hello"
+      }
+    },
+    "extra": "123",
+    "nullable": null
+  }
+}

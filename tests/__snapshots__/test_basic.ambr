@@ -1,0 +1,26 @@
+# serializer version: 1
+# name: test_explain
+  '''
+  
+  Dictionary did not match schema:
+    Missing fields:
+        - 'a'
+    Extraneous fields:
+        - 'c'
+    - Field 'b' did not match schema:
+      List items did not match schema:
+        - Item 1:
+          Mapping items did not match schema:
+            - Value for key '1':
+              Expected an integer:
+                'hello'
+                did not match
+                <class 'int'>
+        - Item 2:
+          Mapping type does not match:
+            True
+            did not match
+            dict[str, int]
+  
+  '''
+# ---
