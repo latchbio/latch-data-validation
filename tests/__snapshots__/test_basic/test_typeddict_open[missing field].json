@@ -1,0 +1,11 @@
+{
+  "children": [],
+  "cls": "test_typeddict_open.<locals>.Test",
+  "details": {
+    "missing fields": [
+      "- 'a'"
+    ]
+  },
+  "msg": "dictionary did not match schema",
+  "val": {}
+}

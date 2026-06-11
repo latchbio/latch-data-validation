@@ -1,0 +1,14 @@
+{
+  "children": [],
+  "cls": "test_typeddict_closed.<locals>.Test1",
+  "details": {
+    "extraneous fields": [
+      "- 'b'"
+    ]
+  },
+  "msg": "dictionary did not match schema",
+  "val": {
+    "a": 123,
+    "b": 456
+  }
+}

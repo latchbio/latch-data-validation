@@ -419,6 +419,16 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
 
         types = get_type_hints(cls)
 
+        # PEP 728
+        # todo(maximsmol): technically, the default should be False
+        # but PyRight defaults to True and you can manually set False
+        closed = getattr(cls, "__closed__", True)
+        if closed is None:
+            closed = True
+
+        # todo(maximsmol): support extra_items
+        # extra_items = getattr(cls, "__extra_items__", NoExtraItems)
+
         fields: dict[str, object] = {}
         schema_fields: set[str] = set()
 
@@ -448,12 +458,12 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
             except DataValidationError as e:
                 errors.append((f"field {k!r} did not match schema", e))
 
-        for k in x.keys():
-            if k in schema_fields:
-                continue
+        if closed:
+            for k in x.keys():
+                if k in schema_fields:
+                    continue
 
-            # todo(maximsmol): after PEP 728, default should be open `TypedDict`s
-            extraneous_fields.append(f"- {k!r}")
+                extraneous_fields.append(f"- {k!r}")
 
         if len(missing_fields) > 0 or len(extraneous_fields) > 0 or len(errors) > 0:
             raise DataValidationError(

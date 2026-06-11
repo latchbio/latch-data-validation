@@ -200,6 +200,37 @@ def test_typeddict_nontotal(snapshot_json) -> None:
     assert e.value.json() == snapshot_json(name="missing field")
 
 
+def test_typeddict_open(snapshot_json) -> None:
+    class Test(TypedDict, closed=False):
+        a: int
+
+    _ = validate({"a": 123}, Test)
+    _ = validate({"a": 123, "b": 456}, Test)
+
+    with pytest.raises(DataValidationError) as e:
+        _ = validate({}, Test)
+    assert e.value.json() == snapshot_json(name="missing field")
+
+
+def test_typeddict_closed(snapshot_json) -> None:
+    class Test(TypedDict, closed=True):
+        a: int
+
+    _ = validate({"a": 123}, Test)
+
+    with pytest.raises(DataValidationError) as e:
+        _ = validate({"a": 123, "b": 456}, Test)
+    assert e.value.json() == snapshot_json(name="extraneous field")
+
+    # omitted but using typing_extensions, should raise the same as regular TypedDict
+    class Test1(TypedDict):
+        a: int
+
+    with pytest.raises(DataValidationError) as e:
+        _ = validate({"a": 123, "b": 456}, Test1)
+    assert e.value.json() == snapshot_json(name="extraneous field, no closed")
+
+
 def test_explain(snapshot) -> None:
     class Test(typing.TypedDict):
         a: int
