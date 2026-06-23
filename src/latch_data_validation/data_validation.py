@@ -186,7 +186,7 @@ __all__ += ["DataValidationError"]
 
 # todo(maximsmol): typing
 def _untraced_validate(
-    x: JsonValue, cls: type[T], *, type_vars: dict[int, TypeForm[object]]
+    x: JsonValue, cls: TypeForm[T], *, type_vars: dict[int, TypeForm[object]]
 ) -> T:
     # todo(maximsmol): improve error messages with generics
     if isinstance(cls, TypeVar):
@@ -575,14 +575,14 @@ def _untraced_validate(
     raise DataValidationError("[!Internal Error!] unknown type", x, cls)
 
 
-def untraced_validate(x: JsonValue, cls: type[T]) -> T:
+def untraced_validate(x: JsonValue, cls: TypeForm[T]) -> T:
     return _untraced_validate(x, cls, type_vars={})
 
 
 __all__ += ["untraced_validate"]
 
 
-def validate(x: JsonValue, cls: type[T]) -> T:
+def validate(x: JsonValue, cls: TypeForm[T]) -> T:
     if get_tracer is None:
         return untraced_validate(x, cls)
 

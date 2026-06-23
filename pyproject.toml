@@ -1,6 +1,6 @@
 [project]
 name = "latch-data-validation"
-version = "0.1.15"
+version = "0.1.16"
 description = "Runtime type validation"
 authors = [{ name = "maximsmol", email = "max@latch.bio" }]
 dependencies = [
@@ -194,3 +194,5 @@ reportUnknownParameterType = "none"
 reportUnknownVariableType = "none"
 
 reportUnusedImport = "warning"
+
+enableExperimentalFeatures = true
