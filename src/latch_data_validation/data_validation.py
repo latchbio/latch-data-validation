@@ -6,10 +6,12 @@ from collections.abc import Iterable, Sequence
 from contextlib import suppress
 from enum import Enum
 from itertools import chain
+from textwrap import wrap
 from types import FrameType, NoneType, UnionType
 from typing import (
     Any,
     ForwardRef,
+    Generic,
     Literal,
     NewType,
     TypeAlias,
@@ -26,12 +28,15 @@ from typing import (  # noqa: UP035
     Sequence as SequenceOld,  # pyright: ignore[reportDeprecated]
 )
 
-from typing_extensions import NotRequired, Required
+from typing_extensions import NotRequired, Required, TypeForm, override
+
+__all__ = []
 
 get_tracer = None
 with suppress(ImportError):
     from opentelemetry.trace import get_tracer
 
+# todo(maximsmol): weak references?
 forward_frames: dict[int, FrameType] = {}
 real_init = ForwardRef.__init__
 
@@ -59,6 +64,8 @@ JsonArray: TypeAlias = SequenceOld["JsonValue"]
 JsonObject: TypeAlias = MappingOld[str, "JsonValue"]
 JsonValue: TypeAlias = JsonObject | JsonArray | str | int | float | bool | None
 
+__all__ += ["JsonArray", "JsonObject", "JsonValue"]
+
 
 def prettify(x: str, *, add_colon: bool = False) -> str:
     return x[0].title() + x[1:] + (":" if add_colon else "")
@@ -68,6 +75,8 @@ NestyLines: TypeAlias = (
     str | Sequence["NestyLines"]
 )  # todo(maximsmol): make these semantic
 DataValidationErrorChildren: TypeAlias = list[tuple[str | None, "DataValidationError"]]
+
+__all__ += ["NestyLines", "DataValidationErrorChildren"]
 
 
 def render_nesty_lines(x: NestyLines, indent: str = "") -> str:
@@ -81,6 +90,9 @@ def render_nesty_lines(x: NestyLines, indent: str = "") -> str:
     return res
 
 
+__all__ += ["render_nesty_lines"]
+
+
 class DataValidationError(RuntimeError):
     def __init__(
         self,
@@ -89,14 +101,22 @@ class DataValidationError(RuntimeError):
         cls: type[Any],
         /,
         *,
-        details: dict[str, NestyLines] = {},
-        children: DataValidationErrorChildren = [],
+        details: dict[str, NestyLines] | None = None,
+        children: DataValidationErrorChildren | None = None,
     ) -> None:
-        self.msg = msg
-        self.val = val
-        self.cls = cls
-        self.details = details
-        self.children = children
+        if details is None:
+            details = {}
+
+        if children is None:
+            children = []
+
+        self.msg: str = msg
+        self.val: JsonValue = val
+        self.cls: type[Any] = cls
+        self.details: dict[str, NestyLines] = details
+        self.children: DataValidationErrorChildren = children
+
+        super().__init__(str(self))
 
     def json(self) -> JsonValue:
         return dict(
@@ -110,8 +130,6 @@ class DataValidationError(RuntimeError):
         )
 
     def explain(self, indent: str = "") -> str:
-        from textwrap import wrap
-
         pretty_msg = prettify(
             self.msg,
             add_colon=True,
@@ -158,13 +176,29 @@ class DataValidationError(RuntimeError):
 
         return res
 
+    @override
     def __str__(self) -> str:
         return f"\n{self.explain()}"
 
 
-# todo(maximsmol): generics
+__all__ += ["DataValidationError"]
+
+
 # todo(maximsmol): typing
-def untraced_validate(x: JsonValue, cls: type[T]) -> T:
+def _untraced_validate(
+    x: JsonValue, cls: type[T], *, type_vars: dict[int, TypeForm[object]]
+) -> T:
+    # todo(maximsmol): improve error messages with generics
+    if isinstance(cls, TypeVar):
+        ref = type_vars.get(id(cls))
+        if ref is None:
+            ref = getattr(cls, "__default__", None)
+
+        if ref is None:
+            raise ValueError(f"unresolvable TypeVar: {cls!r}")
+
+        return _untraced_validate(x, ref, type_vars=type_vars)
+
     if cls is None:
         if x is not None:
             raise DataValidationError("expected None", x, cls)
@@ -180,17 +214,23 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
         if frame is None:
             raise ValueError(f"untraced ForwardRef: {cls!r}")
 
-        f_globals = frame.f_globals
-        f_locals = frame.f_locals
+        while True:
+            f_globals = frame.f_globals
+            f_locals = frame.f_locals
 
-        next = f_globals.get(fr.__forward_arg__)
-        if next is None:
-            next = f_locals.get(fr.__forward_arg__)
+            ref = f_globals.get(fr.__forward_arg__)
+            if ref is None:
+                ref = f_locals.get(fr.__forward_arg__)
 
-        if next is None:
-            raise ValueError(f"unresolvable ForwardRef: {cls!r}")
+            if ref is not None:
+                break
 
-        return untraced_validate(x, next)
+            if frame.f_back is None:
+                raise ValueError(f"unresolvable ForwardRef: {cls!r}")
+
+            frame = frame.f_back
+
+        return _untraced_validate(x, ref, type_vars=type_vars)
 
     if isinstance(cls, str):
         raise ValueError(f"untraced ForwardRef: {cls!r}")
@@ -200,7 +240,7 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
 
     if isinstance(cls, NewType):
         # todo(maximsmol): this probably needs to be typed properly on the gql client layer like enums
-        return untraced_validate(x, cls.__supertype__)
+        return _untraced_validate(x, cls.__supertype__, type_vars=type_vars)
 
     if dataclasses.is_dataclass(cls):
         if not isinstance(x, dict):
@@ -219,7 +259,9 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
                 continue
 
             try:
-                fields[f.name] = untraced_validate(x[f.name], f.type)
+                fields[f.name] = _untraced_validate(
+                    x[f.name], f.type, type_vars=type_vars
+                )
             except DataValidationError as e:
                 errors.append((f"field {f.name!r} did not match schema", e))
 
@@ -290,13 +332,21 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
             errors: DataValidationErrorChildren = []
             for arg in args:
                 try:
-                    return untraced_validate(x, arg)
+                    return _untraced_validate(x, arg, type_vars=type_vars)
                 except DataValidationError as e:
                     errors.append((f"option {arg!r} did not match", e))
 
             raise DataValidationError(
                 "union did not match schema", x, cls, children=errors
             )
+
+        if issubclass(origin, Generic):
+            type_vars2 = {**type_vars}
+
+            for k, v in zip(origin.__parameters__, get_args(cls), strict=True):
+                type_vars2[id(k)] = v
+
+            return _untraced_validate(x, origin, type_vars=type_vars2)
 
         if issubclass(origin, collections.abc.Mapping):
             if not isinstance(x, origin):
@@ -314,13 +364,13 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
                 value = None
 
                 try:
-                    key = untraced_validate(k, key_type)
+                    key = _untraced_validate(k, key_type, type_vars=type_vars)
                     key_ok = True
                 except DataValidationError as e:
                     errors.append((f"key {k!r}", e))
 
                 try:
-                    value = untraced_validate(v, value_type)
+                    value = _untraced_validate(v, value_type, type_vars=type_vars)
                     value_ok = True
                 except DataValidationError as e:
                     errors.append((f"value for key {k!r}", e))
@@ -351,7 +401,7 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
                 errors: DataValidationErrorChildren = []
                 for idx, item in enumerate(x):
                     try:
-                        res.append(untraced_validate(item, ts[0]))
+                        res.append(_untraced_validate(item, ts[0], type_vars=type_vars))
                     except DataValidationError as e:
                         errors.append((f"item {idx + 1}", e))
 
@@ -366,7 +416,7 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
             errors: DataValidationErrorChildren = []
             for idx, (item, item_type) in enumerate(zip(x, ts)):
                 try:
-                    res.append(untraced_validate(item, item_type))
+                    res.append(_untraced_validate(item, item_type, type_vars=type_vars))
                 except DataValidationError as e:
                     errors.append((f"item {idx + 1}", e))
 
@@ -395,7 +445,7 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
             errors: DataValidationErrorChildren = []
             for idx, item in enumerate(x):
                 try:
-                    res.append(untraced_validate(item, item_type))
+                    res.append(_untraced_validate(item, item_type, type_vars=type_vars))
                 except DataValidationError as e:
                     errors.append((f"item {idx + 1}", e))
 
@@ -454,7 +504,7 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
                 if origin is NotRequired or origin is Required:
                     typ = get_args(typ)[0]
 
-                fields[k] = untraced_validate(x[k], typ)
+                fields[k] = _untraced_validate(x[k], typ, type_vars=type_vars)
             except DataValidationError as e:
                 errors.append((f"field {k!r} did not match schema", e))
 
@@ -525,6 +575,13 @@ def untraced_validate(x: JsonValue, cls: type[T]) -> T:
     raise DataValidationError("[!Internal Error!] unknown type", x, cls)
 
 
+def untraced_validate(x: JsonValue, cls: type[T]) -> T:
+    return _untraced_validate(x, cls, type_vars={})
+
+
+__all__ += ["untraced_validate"]
+
+
 def validate(x: JsonValue, cls: type[T]) -> T:
     if get_tracer is None:
         return untraced_validate(x, cls)
@@ -546,3 +603,6 @@ def validate(x: JsonValue, cls: type[T]) -> T:
         )
 
         return untraced_validate(x, cls)
+
+
+__all__ += ["validate"]

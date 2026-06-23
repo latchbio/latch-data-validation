@@ -1,11 +1,10 @@
-from enum import Enum
-import sys
 import typing
 from collections.abc import Mapping, Sequence
+from enum import Enum
 
 import pytest
 from syrupy.extensions.json import JSONSnapshotExtension
-from typing_extensions import NotRequired, Required, TypedDict
+from typing_extensions import NotRequired, Required, TypedDict, TypeVar
 
 BrokenJsonArray: typing.TypeAlias = typing.Sequence["BrokenJsonValue"]  # pyright: ignore[reportDeprecated]
 BrokenJsonObject: typing.TypeAlias = typing.Mapping[str, "BrokenJsonValue"]  # pyright: ignore[reportDeprecated]
@@ -144,6 +143,19 @@ def test_dataclass(snapshot_json) -> None:
         _ = validate(data, Test)
     assert e.value.json() == snapshot_json(name="extraneous field")
 
+    @dataclass
+    class Test:
+        a: int
+        b: dict[str, int]
+        c: typing.Optional["Test"] = None
+
+    x = validate({"a": 1, "b": {"1": 2}, "c": {"a": 2, "b": {"1": 3}}}, Test)
+    assert isinstance(x, Test)
+    assert isinstance(x.c, Test)
+
+    assert x.a == 1
+    assert x.c.a == 2
+
 
 def test_forwardref(snapshot_json) -> None:
     _ = validate({"a": 123}, JsonValue)
@@ -239,3 +251,43 @@ def test_explain(snapshot) -> None:
     with pytest.raises(DataValidationError) as e:
         _ = validate({"b": [{"1": "hello"}, True], "c": "extra"}, Test)
     assert str(e.value) == snapshot
+
+
+def test_generics(snapshot_json) -> None:
+    from dataclasses import dataclass
+
+    T = TypeVar("T")
+
+    @dataclass
+    class Test(typing.Generic[T]):
+        a: T
+
+    _ = validate({"a": 123}, Test[int])
+    _ = validate({"a": "hello"}, Test[str])
+
+    with pytest.raises(DataValidationError) as e:
+        _ = validate({"a": 123}, Test[str])
+    assert e.value.json() == snapshot_json(name="basic")
+
+    T1 = TypeVar("T1", default=int)
+
+    @dataclass
+    class Test1(typing.Generic[T1]):
+        a: T1
+
+    _ = validate({"a": 123}, Test1)
+    _ = validate({"a": "hello"}, Test1[str])
+
+    with pytest.raises(DataValidationError) as e:
+        _ = validate({"a": "hello"}, Test1)
+    assert e.value.json() == snapshot_json(name="defaults")
+
+    class Test2(TypedDict, typing.Generic[T]):
+        a: T
+
+    _ = validate({"a": 123}, Test2[int])
+    _ = validate({"a": "hello"}, Test2[str])
+
+    with pytest.raises(DataValidationError) as e:
+        _ = validate({"a": 123}, Test2[str])
+    assert e.value.json() == snapshot_json(name="typeddict")

@@ -1,0 +1,20 @@
+{
+  "children": [
+    [
+      "field 'a' did not match schema",
+      {
+        "children": [],
+        "cls": "str",
+        "details": {},
+        "msg": "expected a string",
+        "val": 123
+      }
+    ]
+  ],
+  "cls": "test_generics.<locals>.Test2",
+  "details": {},
+  "msg": "dictionary did not match schema",
+  "val": {
+    "a": 123
+  }
+}
