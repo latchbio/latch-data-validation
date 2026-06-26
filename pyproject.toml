@@ -1,6 +1,6 @@
 [project]
 name = "latch-data-validation"
-version = "0.1.16"
+version = "0.1.17"
 description = "Runtime type validation"
 authors = [{ name = "maximsmol", email = "max@latch.bio" }]
 dependencies = [

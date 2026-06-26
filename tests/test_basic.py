@@ -217,7 +217,7 @@ def test_typeddict_open(snapshot_json) -> None:
         a: int
 
     _ = validate({"a": 123}, Test)
-    _ = validate({"a": 123, "b": 456}, Test)
+    assert validate({"a": 123, "b": 456}, Test) == {"a": 123, "b": 456}
 
     with pytest.raises(DataValidationError) as e:
         _ = validate({}, Test)

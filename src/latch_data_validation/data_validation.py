@@ -508,12 +508,14 @@ def _untraced_validate(
             except DataValidationError as e:
                 errors.append((f"field {k!r} did not match schema", e))
 
-        if closed:
-            for k in x.keys():
-                if k in schema_fields:
-                    continue
+        for k in x:
+            if k in schema_fields:
+                continue
 
+            if closed:
                 extraneous_fields.append(f"- {k!r}")
+            else:
+                fields[k] = x[k]
 
         if len(missing_fields) > 0 or len(extraneous_fields) > 0 or len(errors) > 0:
             raise DataValidationError(
