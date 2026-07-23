@@ -28,7 +28,7 @@ from typing import (  # noqa: UP035
     Sequence as SequenceOld,  # pyright: ignore[reportDeprecated]
 )
 
-from typing_extensions import NotRequired, Required, TypeForm, override
+from typing_extensions import NotRequired, Required, TypeAliasType, TypeForm, override
 
 __all__ = []
 
@@ -189,6 +189,9 @@ def _untraced_validate(
     x: JsonValue, cls: TypeForm[T], *, type_vars: dict[int, TypeForm[object]]
 ) -> T:
     # todo(maximsmol): improve error messages with generics
+    if isinstance(cls, TypeAliasType):
+        return _untraced_validate(x, cls.__value__, type_vars=type_vars)
+
     if isinstance(cls, TypeVar):
         ref = type_vars.get(id(cls))
         if ref is None:
@@ -309,6 +312,14 @@ def _untraced_validate(
 
     origin = get_origin(cls)
     if origin is not None:
+        if isinstance(origin, TypeAliasType):
+            type_vars2 = {**type_vars}
+            for parameter, argument in zip(
+                origin.__type_params__, get_args(cls), strict=True
+            ):
+                type_vars2[id(parameter)] = argument
+            return _untraced_validate(x, origin.__value__, type_vars=type_vars2)
+
         if origin is Literal:
             args = get_args(cls)
 
