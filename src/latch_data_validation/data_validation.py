@@ -189,6 +189,15 @@ def _untraced_validate(
     x: JsonValue, cls: TypeForm[T], *, type_vars: dict[int, TypeForm[object]]
 ) -> T:
     # todo(maximsmol): improve error messages with generics
+    alias_origin = get_origin(cls)
+    if isinstance(alias_origin, TypeAliasType):
+        type_vars2 = {**type_vars}
+        for parameter, argument in zip(
+            alias_origin.__type_params__, get_args(cls), strict=True
+        ):
+            type_vars2[id(parameter)] = argument
+        return _untraced_validate(x, alias_origin.__value__, type_vars=type_vars2)
+
     if isinstance(cls, TypeAliasType):
         return _untraced_validate(x, cls.__value__, type_vars=type_vars)
 
@@ -312,14 +321,6 @@ def _untraced_validate(
 
     origin = get_origin(cls)
     if origin is not None:
-        if isinstance(origin, TypeAliasType):
-            type_vars2 = {**type_vars}
-            for parameter, argument in zip(
-                origin.__type_params__, get_args(cls), strict=True
-            ):
-                type_vars2[id(parameter)] = argument
-            return _untraced_validate(x, origin.__value__, type_vars=type_vars2)
-
         if origin is Literal:
             args = get_args(cls)
 
