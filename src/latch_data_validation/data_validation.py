@@ -28,7 +28,7 @@ from typing import (  # noqa: UP035
     Sequence as SequenceOld,  # pyright: ignore[reportDeprecated]
 )
 
-from typing_extensions import NotRequired, Required, TypeForm, override
+from typing_extensions import NotRequired, Required, TypeAliasType, TypeForm, override
 
 __all__ = []
 
@@ -188,6 +188,9 @@ __all__ += ["DataValidationError"]
 def _untraced_validate(
     x: JsonValue, cls: TypeForm[T], *, type_vars: dict[int, TypeForm[object]]
 ) -> T:
+    if isinstance(cls, TypeAliasType):
+        return _untraced_validate(x, cls.__value__, type_vars=type_vars)
+
     # todo(maximsmol): improve error messages with generics
     if isinstance(cls, TypeVar):
         ref = type_vars.get(id(cls))
