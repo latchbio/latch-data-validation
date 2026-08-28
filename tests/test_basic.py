@@ -1,10 +1,11 @@
 import typing
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from enum import Enum
 
 import pytest
 from syrupy.extensions.json import JSONSnapshotExtension
-from typing_extensions import NotRequired, Required, TypedDict, TypeVar
+from typing_extensions import NotRequired, Required, TypeAliasType, TypedDict, TypeVar
 
 BrokenJsonArray: typing.TypeAlias = typing.Sequence["BrokenJsonValue"]  # pyright: ignore[reportDeprecated]
 BrokenJsonObject: typing.TypeAlias = typing.Mapping[str, "BrokenJsonValue"]  # pyright: ignore[reportDeprecated]
@@ -17,6 +18,19 @@ BrokenJsonObject2: typing.TypeAlias = Mapping[str, "BrokenJsonValue2"]
 BrokenJsonValue2: typing.TypeAlias = (
     BrokenJsonObject2 | BrokenJsonArray2 | str | int | float | bool | None
 )
+
+TestWaitingReason = TypeAliasType(
+    "TestWaitingReason", typing.Literal["workspace_capacity", "taiga_rate_limited"]
+)
+
+
+@dataclass
+class AliasedRequest:
+    waiting_reason: TestWaitingReason | None
+
+
+AliasT = TypeVar("AliasT")
+TestBox = TypeAliasType("TestBox", list[AliasT], type_params=(AliasT,))
 
 
 from latch_data_validation.data_validation import (
@@ -155,6 +169,24 @@ def test_dataclass(snapshot_json) -> None:
 
     assert x.a == 1
     assert x.c.a == 2
+
+
+def test_type_alias() -> None:
+    assert validate(
+        {"waiting_reason": "workspace_capacity"}, AliasedRequest
+    ) == AliasedRequest(waiting_reason="workspace_capacity")
+    assert validate({"waiting_reason": None}, AliasedRequest) == AliasedRequest(
+        waiting_reason=None
+    )
+
+    with pytest.raises(DataValidationError):
+        _ = validate({"waiting_reason": "unknown"}, AliasedRequest)
+
+
+def test_generic_type_alias() -> None:
+    assert validate([1, 2], TestBox[int]) == [1, 2]
+    with pytest.raises(DataValidationError):
+        _ = validate([1, "two"], TestBox[int])
 
 
 def test_forwardref(snapshot_json) -> None:

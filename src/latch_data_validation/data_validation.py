@@ -196,6 +196,18 @@ def _untraced_validate(
         return _untraced_validate(x, cls.__value__, type_vars=type_vars)
 
     # todo(maximsmol): improve error messages with generics
+    alias_origin = get_origin(cls)
+    if isinstance(alias_origin, TypeAliasType):
+        type_vars2 = {**type_vars}
+        for parameter, argument in zip(
+            alias_origin.__type_params__, get_args(cls), strict=True
+        ):
+            type_vars2[id(parameter)] = argument
+        return _untraced_validate(x, alias_origin.__value__, type_vars=type_vars2)
+
+    if isinstance(cls, TypeAliasType):
+        return _untraced_validate(x, cls.__value__, type_vars=type_vars)
+
     if isinstance(cls, TypeVar):
         ref = type_vars.get(id(cls))
         if ref is None:
