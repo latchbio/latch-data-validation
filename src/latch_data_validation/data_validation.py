@@ -32,6 +32,10 @@ from typing_extensions import NotRequired, Required, TypeAliasType, TypeForm, ov
 
 __all__ = []
 
+type_alias_types = (TypeAliasType,)
+if sys.version_info >= (3, 12):
+    type_alias_types = (*type_alias_types, typing.TypeAliasType)
+
 get_tracer = None
 with suppress(ImportError):
     from opentelemetry.trace import get_tracer
@@ -188,7 +192,7 @@ __all__ += ["DataValidationError"]
 def _untraced_validate(
     x: JsonValue, cls: TypeForm[T], *, type_vars: dict[int, TypeForm[object]]
 ) -> T:
-    if isinstance(cls, TypeAliasType):
+    if isinstance(cls, type_alias_types):
         return _untraced_validate(x, cls.__value__, type_vars=type_vars)
 
     # todo(maximsmol): improve error messages with generics
