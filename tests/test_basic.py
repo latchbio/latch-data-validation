@@ -1,5 +1,6 @@
 import typing
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from enum import Enum
 
 import pytest
@@ -104,8 +105,6 @@ def test_smoke(snapshot_json) -> None:
 
 
 def test_dataclass(snapshot_json) -> None:
-    from dataclasses import dataclass
-
     @dataclass
     class Inner:
         zzz: str
@@ -155,6 +154,22 @@ def test_dataclass(snapshot_json) -> None:
 
     assert x.a == 1
     assert x.c.a == 2
+
+
+def test_json_arrays_validate_as_nested_tuples() -> None:
+    @dataclass(frozen=True)
+    class TuplePayload:
+        labels: tuple[str, ...]
+        pairs: tuple[tuple[str, str], ...]
+
+    payload = {
+        "labels": ["one", "two"],
+        "pairs": [["name", "digest"], ["other", "checksum"]],
+    }
+
+    assert validate(payload, TuplePayload) == TuplePayload(
+        labels=("one", "two"), pairs=(("name", "digest"), ("other", "checksum"))
+    )
 
 
 def test_forwardref(snapshot_json) -> None:
@@ -254,8 +269,6 @@ def test_explain(snapshot) -> None:
 
 
 def test_generics(snapshot_json) -> None:
-    from dataclasses import dataclass
-
     T = TypeVar("T")
 
     @dataclass
