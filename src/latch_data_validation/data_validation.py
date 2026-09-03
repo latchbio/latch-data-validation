@@ -398,8 +398,11 @@ def _untraced_validate(
             return origin(res)
 
         if issubclass(origin, tuple):
-            if not isinstance(x, tuple):
-                raise DataValidationError("expected a tuple", x, cls)
+            # JSON has one array type, which decoders represent as a list even
+            # when the target Python contract is a tuple. Accept either concrete
+            # array representation, then construct the annotated tuple below.
+            if not isinstance(x, list | tuple):
+                raise DataValidationError("expected an array", x, cls)
 
             ts = get_args(cls)
 
