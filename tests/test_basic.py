@@ -32,6 +32,27 @@ def snapshot_json(snapshot):
     return snapshot.use_extension(JSONSnapshotExtension)
 
 
+def test_validation_error_formats_lazily(monkeypatch: pytest.MonkeyPatch) -> None:
+    explanations: list[DataValidationError] = []
+
+    def explain(error: DataValidationError) -> str:
+        explanations.append(error)
+        return "full explanation"
+
+    monkeypatch.setattr(DataValidationError, "explain", explain)
+
+    # The rejected int alternative must not format an error before str matches.
+    assert validate("hello", int | str) == "hello"
+    with pytest.raises(DataValidationError) as raised:
+        validate("hello", int)
+
+    assert raised.value.args == ("expected an integer",)
+    assert raised.value.json()["val"] == "hello"
+    assert explanations == []
+    assert str(raised.value) == "\nfull explanation"
+    assert explanations == [raised.value]
+
+
 def test_smoke(snapshot_json) -> None:
     _ = validate(10, int)
     _ = validate(10.0, float)
