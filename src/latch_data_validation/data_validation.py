@@ -120,7 +120,9 @@ class DataValidationError(RuntimeError):
         self.details: dict[str, NestyLines] = details
         self.children: DataValidationErrorChildren = children
 
-        super().__init__(str(self))
+        # Union validation discards errors from alternatives that do not match.
+        # Render the full explanation only when __str__ is explicitly requested.
+        super().__init__(msg)
 
     def json(self) -> JsonValue:
         return dict(
